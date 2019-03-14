@@ -1,6 +1,8 @@
 """
 User Partitions Transformer
 """
+from django.utils.translation import ugettext as _
+
 from lms.djangoapps.courseware.access import has_access
 from openedx.core.djangoapps.content.block_structure.transformer import (
     BlockStructureTransformer,
@@ -31,6 +33,9 @@ class UserPartitionTransformer(FilteringTransformerMixin, BlockStructureTransfor
         same identifier used in setup.py.
         """
         return "user_partitions"
+
+    def __init__(self, hide_access_denials=True):
+        self.hide_access_denials = hide_access_denials
 
     @classmethod
     def collect(cls, block_structure):
@@ -79,16 +84,34 @@ class UserPartitionTransformer(FilteringTransformerMixin, BlockStructureTransfor
             return [block_structure.create_universal_filter()]
 
         user_groups = get_user_partition_groups(usage_info.course_key, user_partitions, user, 'id')
-        group_access_filter = block_structure.create_removal_filter(
-            lambda block_key: not (
-                has_access(user, 'staff', block_key) or
-                block_structure.get_transformer_block_field(block_key, self, 'merged_group_access').check_group_access(
-                    user_groups
+        if self.hide_access_denials:
+            group_access_filter = block_structure.create_removal_filter(
+                lambda block_key: not (
+                    has_access(user, 'staff', block_key) or
+                    block_structure.get_transformer_block_field(
+                        block_key, self, 'merged_group_access'
+                    ).check_group_access(
+                        user_groups
+                    )
                 )
             )
-        )
-
-        result_list.append(group_access_filter)
+            result_list.append(group_access_filter)
+        else:
+            for block_key in block_structure.topological_traversal():
+                if not (
+                        has_access(user, 'staff', block_key) or
+                        block_structure.get_transformer_block_field(
+                            block_key, self, 'merged_group_access'
+                        ).check_group_access(
+                            user_groups
+                        )):
+                    block_structure.override_xblock_field(
+                        block_key, 'authorization_denial_reason', 'feature_based_enrollments'
+                    )
+                    block_structure.override_xblock_field(
+                        block_key, 'authorization_denial_message',
+                        _('Graded assessments are available to Verified Track learners.')
+                    )
         return result_list
 
 

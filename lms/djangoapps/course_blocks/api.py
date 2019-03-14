@@ -30,7 +30,7 @@ def has_individual_student_override_provider():
     return INDIVIDUAL_STUDENT_OVERRIDE_PROVIDER in getattr(settings, 'FIELD_OVERRIDE_PROVIDERS', ())
 
 
-def get_course_block_access_transformers(user):
+def get_course_block_access_transformers(user, hide_access_denials=True):
     """
     Default list of transformers for manipulating course block structures
     based on the user's access to the course blocks.
@@ -44,7 +44,7 @@ def get_course_block_access_transformers(user):
         library_content.ContentLibraryTransformer(),
         start_date.StartDateTransformer(),
         ContentTypeGateTransformer(),
-        user_partitions.UserPartitionTransformer(),
+        user_partitions.UserPartitionTransformer(hide_access_denials),
         visibility.VisibilityTransformer(),
     ]
 

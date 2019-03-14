@@ -1,5 +1,5 @@
 """
-Hide Empty Transformer implementation.
+Access Denied Message Filter Transformer implementation.
 """
 # TODO: Remove this file after REVE-52 lands and old-mobile-app traffic falls to < 5% of mobile traffic
 from openedx.core.djangoapps.content.block_structure.transformer import (
@@ -33,11 +33,10 @@ class AccessDeniedMessageFilterTransformer(BlockStructureTransformer):
 
     def transform(self, usage_info, block_structure):
         def _filter(block_key):
-            has_children = block_structure.get_xblock_field(block_key, 'has_children')
-            children = block_structure.get_xblock_field(block_key, 'children')
-            return has_children and not any(child in block_structure for child in children)
+            reason = block_structure.get_xblock_field(block_key, 'authorization_denial_reason')
+            message = block_structure.get_xblock_field(block_key, 'authorization_denial_message')
+            return reason or message
 
-        for _ in block_structure.post_order_traversal(
+        block_structure.post_order_traversal(
             filter_func=block_structure.create_removal_filter(_filter)
-        ):
-            pass
+        )
