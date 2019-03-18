@@ -241,6 +241,7 @@ def get_experiment_user_metadata_context(course, user):
                 courses_left_to_purchase_price = None
                 courses_left_to_purchase_url = None
                 program_uuid = program.get('uuid')
+                is_eligible_for_one_click_purchase = program.get('is_program_eligible_for_one_click_purchase')
                 if courses is not None:
                     total_courses = len(courses)
                     complete_enrollment = is_enrolled_in_all_courses(courses, user_enrollments)
@@ -255,15 +256,19 @@ def get_experiment_user_metadata_context(course, user):
                         courses_left_to_purchase = get_unenrolled_courses(courses, non_audit_enrollments)
                         if courses_left_to_purchase:
                             has_courses_left_to_purchase = True
-                        courses_left_to_purchase_price, courses_left_to_purchase_skus = get_program_price_and_skus(
-                            courses_left_to_purchase)
-                        courses_left_to_purchase_url = EcommerceService().get_checkout_page_url(
-                            *courses_left_to_purchase_skus, program_uuid=program_uuid)
+                            if is_eligible_for_one_click_purchase:
+                                courses_left_to_purchase_price, courses_left_to_purchase_skus = \
+                                    get_program_price_and_skus(courses_left_to_purchase)
+                                if courses_left_to_purchase_skus:
+                                    courses_left_to_purchase_url = EcommerceService().get_checkout_page_url(
+                                         *courses_left_to_purchase_skus, program_uuid=program_uuid)
 
                 program_key = {
                     'uuid': program_uuid,
                     'title': program.get('title'),
                     'marketing_url': program.get('marketing_url'),
+                    'status': program.get('status'),
+                    'is_eligible_for_one_click_purchase': is_eligible_for_one_click_purchase,
                     'total_courses': total_courses,
                     'complete_enrollment': complete_enrollment,
                     'has_courses_left_to_purchase': has_courses_left_to_purchase,
