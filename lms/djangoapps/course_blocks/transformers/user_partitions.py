@@ -8,7 +8,11 @@ from openedx.core.djangoapps.content.block_structure.transformer import (
     BlockStructureTransformer,
     FilteringTransformerMixin
 )
-from xmodule.partitions.partitions_service import get_user_partition_groups, get_all_partitions_for_course
+from xmodule.partitions.partitions_service import (
+    get_all_partitions_for_course,
+    get_partition_from_id,
+    get_user_partition_groups
+)
 
 from .split_test import SplitTestTransformer
 from .utils import get_field_on_block
@@ -33,9 +37,6 @@ class UserPartitionTransformer(FilteringTransformerMixin, BlockStructureTransfor
         same identifier used in setup.py.
         """
         return "user_partitions"
-
-    def __init__(self, hide_access_denials=True):
-        self.hide_access_denials = hide_access_denials
 
     @classmethod
     def collect(cls, block_structure):
@@ -84,33 +85,28 @@ class UserPartitionTransformer(FilteringTransformerMixin, BlockStructureTransfor
             return [block_structure.create_universal_filter()]
 
         user_groups = get_user_partition_groups(usage_info.course_key, user_partitions, user, 'id')
-        if self.hide_access_denials:
-            group_access_filter = block_structure.create_removal_filter(
-                lambda block_key: not (
-                    has_access(user, 'staff', block_key) or
-                    block_structure.get_transformer_block_field(
-                        block_key, self, 'merged_group_access'
-                    ).check_group_access(
-                        user_groups
-                    )
-                )
+        for block_key in block_structure.topological_traversal():
+            transformer_block_field = block_structure.get_transformer_block_field(
+                block_key, self, 'merged_group_access'
             )
-            result_list.append(group_access_filter)
-        else:
-            for block_key in block_structure.topological_traversal():
-                if not (
-                        has_access(user, 'staff', block_key) or
-                        block_structure.get_transformer_block_field(
-                            block_key, self, 'merged_group_access'
-                        ).check_group_access(
-                            user_groups
-                        )):
+            access_denying_partition_id = transformer_block_field.get_access_denying_partition(
+                user_groups
+            )
+            access_denying_partition = get_partition_from_id(user_partitions, access_denying_partition_id)
+            if not has_access(user, 'staff', block_key) and access_denying_partition:
+                user_group = user_groups[access_denying_partition_id]
+                allowed_groups = transformer_block_field._access[access_denying_partition_id]
+                access_denied_message = access_denying_partition.access_denied_message(
+                    block_key, user, user_group, allowed_groups
+                )
+                if not access_denied_message:
+                    block_structure.remove_block(block_key, keep_descendants=True)
+                else:
                     block_structure.override_xblock_field(
-                        block_key, 'authorization_denial_reason', 'feature_based_enrollments'
+                        block_key, 'authorization_denial_reason', access_denying_partition.name
                     )
                     block_structure.override_xblock_field(
-                        block_key, 'authorization_denial_message',
-                        _('Graded assessments are available to Verified Track learners.')
+                        block_key, 'authorization_denial_message', access_denied_message
                     )
         return result_list
 
@@ -233,6 +229,35 @@ class _MergedGroupAccess(object):
         else:
             return None
 
+    def get_access_denying_partition(self, user_groups):
+        """
+        Arguments:
+            dict[int: Group]: Given a user, a mapping from user
+                partition IDs to the group to which the user belongs in
+                each partition.
+
+        Returns:
+            bool: Which partition is denying access
+        """
+        for partition_id, allowed_group_ids in self._access.iteritems():
+
+            # If the user is not assigned to a group for this partition,
+            # return partition that would deny access.
+            if partition_id not in user_groups:
+                return partition_id
+
+            # If the user belongs to one of the allowed groups for this
+            # partition, then move and check the next partition.
+            elif user_groups[partition_id].id in allowed_group_ids:
+                continue
+
+            # Else, return partition that would deny access.
+            else:
+                return partition_id
+
+        # The user has access for every partition, return none
+        return None
+
     def check_group_access(self, user_groups):
         """
         Arguments:
@@ -243,21 +268,4 @@ class _MergedGroupAccess(object):
         Returns:
             bool: Whether said user has group access.
         """
-        for partition_id, allowed_group_ids in self._access.iteritems():
-
-            # If the user is not assigned to a group for this partition,
-            # deny access.
-            if partition_id not in user_groups:
-                return False
-
-            # If the user belongs to one of the allowed groups for this
-            # partition, then move and check the next partition.
-            elif user_groups[partition_id].id in allowed_group_ids:
-                continue
-
-            # Else, deny access.
-            else:
-                return False
-
-        # The user has access for every partition, grant access.
-        return True
+        return self.get_access_denying_partition(user_groups) is None

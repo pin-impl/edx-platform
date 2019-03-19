@@ -94,17 +94,21 @@ class ContentTypeGatingPartition(UserPartition):
         }))
         return frag
 
-    def access_denied_message(self, block, user, user_group, allowed_groups):
-        if self._is_audit_enrollment(user, block):
-            return _(u"Graded assessments are available to Verified Track learners. Upgrade to Unlock.")
+    def access_denied_message(self, block_key, user, user_group, allowed_groups):
+        if self._is_audit_enrollment(user, block_key):
+            request = crum.get_current_request()
+            if request and is_request_from_mobile_app(request):
+                return _(u"Graded assessments are available to Verified Track learners.")
+            else:
+                return _(u"Graded assessments are available to Verified Track learners. Upgrade to Unlock.")
         return None
 
-    def _is_audit_enrollment(self, user, block):
+    def _is_audit_enrollment(self, user, block_key):
         """
         Checks if user is enrolled in `Audit` track of course or any staff member is
         viewing course as in `Audit` enrollment.
         """
-        course_key = self._get_course_key_from_course_block(block)
+        course_key = block_key.course_key
 
         if self._is_masquerading_as_generic_student(user, course_key):
             return self._is_masquerading_audit_enrollment(user, course_key)
