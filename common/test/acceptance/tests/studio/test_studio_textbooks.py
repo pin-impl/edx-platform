@@ -110,7 +110,6 @@ class TextbooksTest(StudioCourseTest):
                 'landmark-one-main',
                 'page-has-heading-one',
                 'region',
-                'skip-link',
                 'link-href'
             ],
         })
