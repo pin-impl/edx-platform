@@ -82,7 +82,8 @@ class ContentTypeGatingPartition(UserPartition):
         course_key = self._get_course_key_from_course_block(block)
         modes = CourseMode.modes_for_course_dict(course_key)
         verified_mode = modes.get(CourseMode.VERIFIED)
-        if verified_mode is None or not self._is_audit_enrollment(user, block):
+        if (verified_mode is None or not self._is_audit_enrollment(user, block) or
+                user_group.name == 'Full-access Users'):
             return None
         ecommerce_checkout_link = self._get_checkout_link(user, verified_mode.sku)
 
