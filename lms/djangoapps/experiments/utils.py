@@ -261,7 +261,7 @@ def get_experiment_user_metadata_context(course, user):
                                     get_program_price_and_skus(courses_left_to_purchase)
                                 if courses_left_to_purchase_skus:
                                     courses_left_to_purchase_url = EcommerceService().get_checkout_page_url(
-                                         *courses_left_to_purchase_skus, program_uuid=program_uuid)
+                                        *courses_left_to_purchase_skus, program_uuid=program_uuid)
 
                 program_key = {
                     'uuid': program_uuid,
